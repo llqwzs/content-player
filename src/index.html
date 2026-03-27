@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>内容播放器</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>内容播放器</h1>
+      <button id="btn-open">选择文件夹</button>
+      <span id="dir-path"></span>
+      <div id="options-wrapper">
+        <button id="btn-options">选项</button>
+        <div id="options-menu" class="hidden">
+          <label>视频/音频重复播放次数：<input type="number" id="opt-repeat" min="1" max="99" value="1" /></label>
+          <label>图片展示时间（秒）：<input type="number" id="opt-img-time" min="1" max="300" value="5" /></label>
+        </div>
+      </div>
+    </header>
+    <div class="main">
+      <aside id="playlist">
+        <div class="playlist-header">播放列表</div>
+        <ul id="file-list"></ul>
+      </aside>
+      <section id="player-area">
+        <div id="player-container">
+          <div id="empty-hint">请选择文件夹以加载内容文件</div>
+          <video id="video-player" controls style="display:none"></video>
+          <audio id="audio-player" controls style="display:none"></audio>
+          <img id="image-viewer" style="display:none" />
+        </div>
+        <div id="controls">
+          <button id="btn-prev">上一个</button>
+          <button id="btn-next">下一个</button>
+          <label><input type="checkbox" id="auto-play" checked /> 自动播放下一个</label>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

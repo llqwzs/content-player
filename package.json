@@ -1,0 +1,38 @@
+{
+  "name": "content-player",
+  "version": "1.0.0",
+  "description": "Electron + Vite content playlist player",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite build && electron .",
+    "build": "vite build",
+    "pack": "vite build && electron-builder --win --dir",
+    "dist": "vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.content-player.app",
+    "productName": "内容播放器",
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^41.0.4",
+    "electron-builder": "^26.8.1",
+    "vite": "^8.0.3"
+  }
+}
