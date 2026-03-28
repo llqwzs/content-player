@@ -22,7 +22,7 @@
     </header>
     <div class="main">
       <aside id="playlist">
-        <div class="playlist-header">播放列表</div>
+        <div class="playlist-header"><span>播放列表</span><button id="btn-refresh" title="刷新">&#x21bb;</button></div>
         <ul id="file-list"></ul>
       </aside>
       <section id="player-area">
@@ -31,11 +31,19 @@
           <video id="video-player" controls style="display:none"></video>
           <audio id="audio-player" controls style="display:none"></audio>
           <img id="image-viewer" style="display:none" />
+          <div id="folder-view" style="display:none"></div>
         </div>
         <div id="controls">
           <button id="btn-prev">上一个</button>
           <button id="btn-next">下一个</button>
-          <label><input type="checkbox" id="auto-play" checked /> 自动播放下一个</label>
+          <label><input type="checkbox" id="auto-play" /> 自动播放下一个</label>
+          <div id="voice-control">
+            <select id="voice-select"><option value="">默认语音</option></select>
+          </div>
+          <div id="volume-control">
+            <span id="volume-icon" title="静音">🔊</span>
+            <input type="range" id="volume-slider" min="0" max="100" value="100" />
+          </div>
         </div>
       </section>
     </div>
