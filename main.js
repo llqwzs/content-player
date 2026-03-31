@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const mammoth = require('mammoth');
+const XLSX = require('xlsx');
+const JSZip = require('jszip');
 
 const MEDIA_EXTENSIONS = new Set([
   '.mp4', '.webm', '.ogg', '.ogv', '.avi', '.mkv', '.mov',
@@ -9,6 +12,7 @@ const MEDIA_EXTENSIONS = new Set([
   '.txt', '.md', '.log', '.csv', '.json', '.xml', '.ini', '.cfg', '.conf',
   '.doc', '.docx',
   '.xls', '.xlsx',
+  '.ppt', '.pptx',
   '.pdf'
 ]);
 
@@ -17,7 +21,7 @@ function getMediaType(ext) {
   if (['.mp3', '.wav', '.flac', '.aac', '.m4a', '.wma'].includes(ext)) return 'audio';
   if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'].includes(ext)) return 'image';
   if (['.txt', '.md', '.log', '.csv', '.json', '.xml', '.ini', '.cfg', '.conf'].includes(ext)) return 'text';
-  if (['.doc', '.docx', '.xls', '.xlsx'].includes(ext)) return 'office';
+  if (['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'].includes(ext)) return 'office';
   if (ext === '.pdf') return 'pdf';
   return null;
 }
@@ -184,4 +188,95 @@ ipcMain.handle('read-text-file', async (_event, filePath) => {
 // Open file with system default application
 ipcMain.handle('open-file-external', async (_event, filePath) => {
   return shell.openPath(filePath);
+});
+
+// Read office file and convert to HTML
+ipcMain.handle('read-office-file', async (_event, filePath) => {
+  const ext = path.extname(filePath).toLowerCase();
+  try {
+    if (ext === '.docx') {
+      const result = await mammoth.convertToHtml({ path: filePath });
+      return { html: result.value, type: 'docx' };
+    } else if (ext === '.doc') {
+      return { html: null, type: 'doc', unsupported: true };
+    } else if (ext === '.pptx') {
+      const data = fs.readFileSync(filePath);
+      const zip = await JSZip.loadAsync(data);
+      // Find all slide files and sort by number
+      const slideFiles = Object.keys(zip.files)
+        .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+        .sort((a, b) => {
+          const na = parseInt(a.match(/slide(\d+)/)[1]);
+          const nb = parseInt(b.match(/slide(\d+)/)[1]);
+          return na - nb;
+        });
+      // Extract images from pptx
+      const images = {};
+      const imageFiles = Object.keys(zip.files).filter(name => /^ppt\/media\//.test(name));
+      for (const imgPath of imageFiles) {
+        const imgData = await zip.files[imgPath].async('base64');
+        const imgExt = path.extname(imgPath).toLowerCase().slice(1);
+        const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', emf: 'image/emf', wmf: 'image/wmf', tiff: 'image/tiff', tif: 'image/tiff' };
+        images[imgPath] = `data:${mimeMap[imgExt] || 'image/png'};base64,${imgData}`;
+      }
+      // Parse slide relationships to map rId to images
+      const slideRels = {};
+      for (const slideName of slideFiles) {
+        const slideNum = slideName.match(/slide(\d+)/)[1];
+        const relPath = `ppt/slides/_rels/slide${slideNum}.xml.rels`;
+        if (zip.files[relPath]) {
+          const relXml = await zip.files[relPath].async('string');
+          const rels = {};
+          const relMatches = relXml.matchAll(/Id="(rId\d+)"[^>]*Target="([^"]+)"/g);
+          for (const m of relMatches) {
+            const target = m[2].replace('..', 'ppt');
+            rels[m[1]] = target;
+          }
+          slideRels[slideName] = rels;
+        }
+      }
+      let html = '';
+      for (let i = 0; i < slideFiles.length; i++) {
+        const slideXml = await zip.files[slideFiles[i]].async('string');
+        html += `<div class="ppt-slide"><div class="ppt-slide-number">幻灯片 ${i + 1}</div>`;
+        // Extract images referenced in this slide
+        const blipMatches = slideXml.matchAll(/r:embed="(rId\d+)"/g);
+        const rels = slideRels[slideFiles[i]] || {};
+        for (const bm of blipMatches) {
+          const target = rels[bm[1]];
+          if (target && images[target]) {
+            html += `<img src="${images[target]}" class="ppt-image" />`;
+          }
+        }
+        // Extract text from <a:t> tags, group by <a:p> paragraphs
+        const paragraphs = slideXml.split(/<a:p[ >]/);
+        for (let j = 1; j < paragraphs.length; j++) {
+          const textMatches = paragraphs[j].matchAll(/<a:t>([^<]*)<\/a:t>/g);
+          let paraText = '';
+          for (const tm of textMatches) {
+            paraText += tm[1];
+          }
+          if (paraText.trim()) {
+            html += `<p>${paraText.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`;
+          }
+        }
+        html += '</div>';
+      }
+      return { html, type: 'pptx' };
+    } else if (ext === '.ppt') {
+      return { html: null, type: 'ppt', unsupported: true };
+    } else if (ext === '.xls' || ext === '.xlsx') {
+      const workbook = XLSX.readFile(filePath);
+      let html = '';
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        html += `<div class="sheet-name">${sheetName}</div>`;
+        html += XLSX.utils.sheet_to_html(sheet, { editable: false });
+      }
+      return { html, type: 'excel' };
+    }
+    return { html: null, unsupported: true };
+  } catch (err) {
+    return { html: null, error: err.message };
+  }
 });

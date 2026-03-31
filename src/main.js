@@ -97,7 +97,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-const TYPE_ICONS = { video: '🎬', audio: '🎵', image: '🖼️', text: '📝', office: '📎', pdf: '📕' };
+const TYPE_ICONS = { video: '🎬', audio: '🎵', image: '🖼️', text: '📝', office: '📎', pdf: '📕', ppt: '📊' };
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
 
 // Find a same-name image file as poster for a video, within a list of files
@@ -303,6 +303,7 @@ function hideAll() {
   // Stop all media in folder view
   folderView.querySelectorAll('video, audio').forEach(el => el.pause());
   folderView.innerHTML = '';
+  folderView.classList.remove('single-file');
   folderMode = false;
 }
 
@@ -405,16 +406,23 @@ function showFolder(node) {
       embed.className = 'pdf-embed';
       item.appendChild(embed);
     } else if (file.type === 'office') {
-      item.classList.add('office-hint');
-      const icon = document.createElement('div');
-      icon.className = 'office-icon';
-      icon.textContent = file.ext.includes('doc') ? '📄' : '📊';
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'office-content';
+      contentDiv.textContent = '加载中…';
+      item.appendChild(contentDiv);
       const btn = document.createElement('button');
       btn.className = 'office-open-btn';
       btn.textContent = '使用默认程序打开';
       btn.addEventListener('click', (ev) => { ev.stopPropagation(); window.api.openFileExternal(file.path); });
-      item.appendChild(icon);
       item.appendChild(btn);
+      window.api.readOfficeFile(file.path).then(result => {
+        if (result.html && !result.unsupported) {
+          contentDiv.innerHTML = result.html;
+        } else {
+          contentDiv.textContent = result.error ? `读取失败: ${result.error}` : '该格式暂不支持内容预览';
+          item.classList.add('office-hint');
+        }
+      });
     }
 
     folderView.appendChild(item);
@@ -523,9 +531,10 @@ function play(index, { isRepeat = false, autoStart = true } = {}) {
 async function showTextFile(file) {
   folderView.innerHTML = '';
   folderView.style.display = '';
+  folderView.classList.add('single-file');
   const content = await window.api.readTextFile(file.path);
   const item = document.createElement('div');
-  item.className = 'folder-item';
+  item.className = 'folder-item full';
   const btn = createSpeechBtn(content, () => {
     if (autoPlayCheck.checked) playNext();
   });
@@ -541,9 +550,9 @@ async function showTextFile(file) {
 function showPdfFile(file) {
   folderView.innerHTML = '';
   folderView.style.display = '';
+  folderView.classList.add('single-file');
   const item = document.createElement('div');
-  item.className = 'folder-item';
-  item.style.height = '100%';
+  item.className = 'folder-item full';
   const embed = document.createElement('embed');
   embed.src = fileUrl(file.path);
   embed.type = 'application/pdf';
@@ -552,25 +561,47 @@ function showPdfFile(file) {
   folderView.appendChild(item);
 }
 
-// Display office file with open-externally button
-function showOfficeFile(file) {
+// Display office file with inline content
+async function showOfficeFile(file) {
   folderView.innerHTML = '';
   folderView.style.display = '';
+  folderView.classList.add('single-file');
   const item = document.createElement('div');
-  item.className = 'folder-item office-hint';
-  const icon = document.createElement('div');
-  icon.className = 'office-icon';
-  icon.textContent = file.ext.includes('doc') ? '📄' : '📊';
-  const name = document.createElement('div');
-  name.className = 'office-name';
-  name.textContent = file.name;
-  const btn = document.createElement('button');
-  btn.className = 'office-open-btn';
-  btn.textContent = '使用默认程序打开';
-  btn.addEventListener('click', () => window.api.openFileExternal(file.path));
-  item.appendChild(icon);
-  item.appendChild(name);
-  item.appendChild(btn);
+  item.className = 'folder-item full';
+
+  const result = await window.api.readOfficeFile(file.path);
+
+  if (result.html && !result.unsupported) {
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'office-content';
+    contentDiv.innerHTML = result.html;
+    item.appendChild(contentDiv);
+    const btn = document.createElement('button');
+    btn.className = 'office-open-btn';
+    btn.textContent = '使用默认程序打开';
+    btn.addEventListener('click', () => window.api.openFileExternal(file.path));
+    item.appendChild(btn);
+  } else {
+    item.classList.add('office-hint');
+    const icon = document.createElement('div');
+    icon.className = 'office-icon';
+    icon.textContent = file.ext.includes('doc') ? '📄' : '📊';
+    const name = document.createElement('div');
+    name.className = 'office-name';
+    name.textContent = file.name;
+    const info = document.createElement('div');
+    info.className = 'office-name';
+    info.textContent = result.error ? `读取失败: ${result.error}` : '该格式暂不支持内容预览';
+    const btn = document.createElement('button');
+    btn.className = 'office-open-btn';
+    btn.textContent = '使用默认程序打开';
+    btn.addEventListener('click', () => window.api.openFileExternal(file.path));
+    item.appendChild(icon);
+    item.appendChild(name);
+    item.appendChild(info);
+    item.appendChild(btn);
+  }
+
   folderView.appendChild(item);
 }
 
